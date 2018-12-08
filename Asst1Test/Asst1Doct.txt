@@ -1,0 +1,285 @@
+Assignment 1
+
+Multi-Process CSV Sorter
+
+Systems Programming Fall 2018
+Professor Francisco
+Created by: Alfonso Buono and Amulya Mummaneni
+
+Abstract:
+    The objective of this assignment was to write a program that would
+    utilize multi-processing in order to sort a large amount of data.
+    Using file and directory handeling, the program should traverse through
+    a given tree of directories in order to sort the relevant data.
+
+Introduction:
+    The project uses the previous project as a base as it is needed to sort
+    each of the individual files. The project differs as we now are going to
+    deal with a directory of files, or other directories that in turn can hold
+    files or more directories, and we have to traverse through each and sort the
+    CSV files. Although this can be done with a single process crawling through each
+    directory and looking at each file one by one, the complexity of the assignment is
+    increased as multi-processing is required. When going through a directory, the current
+    process will fork(), make a child process, for every file and directory it sees. From there,
+    the new child process will handle the file appropriately, which will be discussed below,
+    or traverse the new directory. 
+
+Methodology:
+
+    Reading Flags/Parameters:
+        The initial part of the assignment that was to be handled was regarding the use of 
+        parameters and flags in the command line. For this project we are using three flags:
+        "-c", "-d", and "-o". "-c" corresponds to the column of the file we should be sorting
+        on. For example, we would type "-c color". This would make us sort all of the valid
+        CSV files by "color". The "-c" flag is required for the program to run and if it is not
+        included, will cause a fatal error and prompt the user to include the "-c" and a header to
+        sort by. Next, "-d" corresponds to the start directory. This flag is not required and if
+        it is not included, the program automatically assumes that the start directory is the current
+        directory that the program is in, "./". However, if the flag is indeed included, then the 
+        program will use the given path and start at that given directory. If the given directory
+        is not valid, as in it does not exist or we do not have reading/writing permissions, the
+        program will throw a fatal error and will prompt the user to include a correct directory.
+        The last flag "-o" corresponds to the end directory. The flag is not required and if it
+        is not included, the program will automatically assume that the sorted CSV files will be
+        placed in the same directory as the file that is being sorted, the source file. If the flag
+        is included, then all of the sorted CSV files will be placed in that output directory, if
+        the directory is valid. The directory is considered valid if it exists and we have permissions
+        to read/write allowing us to put files inside the directory. If the directory is not valid,
+        the program will throw a fatal error and will exit, prompting the user to input a valid
+        output directory.
+
+        Our handling of the flags was done location independent. This means that as long as the flags
+        are there, no matter the location or ordering, the program should run (assuming the parameters
+        are correct). This was done by searching argv for the three flags. If "-c" is not present,
+        the program will throw a fatal error and close. However, if the flag is present then it will
+        look at the value immediately following the location of the flag. This should contain the proper
+        parameter that corresponds to its flag. For the "-d" and "-o" flag, the value following them
+        is then tested to see if the value is valid. If the directory is not, then the program closes.
+
+    Validity of Directories:
+        The "-d" and "-o" parameters are checked for validity by creating a DIR* pointer using 
+        opendir(). When given the path, opendir() will return a pointer to the directory and allow
+        for traversing. However, if the directory does not exist or we do not have permission to view
+        or write, then opendir() returns NULL. This allows us to check whether or not the directory is
+        valid. From this if it is not valid, it allows us to either exit the program and prompt the user to input correct
+        directories or if it is valid, continue running.
+
+    Valid CSV File:
+        Previously the validty of a CSV file is mentioned but not explained. As discussed in class, a CSV file is valid
+        if all of the columns in the header row are a subset of the list given to us. If there is inclusion of a category
+        that is not expected, then the file is not considered to be valid. Furthermore, the file is considered valid if
+        the given value we are sorting by, given by the "-c" parameter, is found in the header row. If it is not, then the
+        file is considered invalid. The file is also checked to make sure that there are no errors in the file itself. 
+        Each row is viewed and checked to make sure there are the same amount of columns as the header row. If there is
+        more or less, then the file is not considered valid. Another check is whether or not the file is sorted already.
+        This is done by checking the name of the file and seeing if "-sorted-" is found. If it is, then the file is not considered
+        valid as it is already sorted.
+
+    File Handling:
+        Due to the program crawling through directories and looking at each file in the current directory, we only
+        care about CSV files. Although a child is created, using fork(), for each file we hit, the child checks to see if it is
+        a CSV file. This is done by going to the last 4 characters of the file name and seeing if it matches ".csv". If it does,
+        then we know that the file is a CSV and we check the validity of the CSV file. If it is valid, then the child sorts the file
+        and outputs it to either the given output directory or the same directory as the source file. The name of the sorted file is
+        the name of the previous file but with "-sorted-" and what we sorted it by tacked on to the end of the file name. 
+
+    Directory Handling:
+        When encountering sub-directories the process fork()'s and creates a child process that will traverse that new directory.
+        This is done in order to utilize multi-processing and increase the speed at which all of the files are sorted. This aspect
+        of the project increased the difficulty for us as we ran into some issues. When finding a directory, we would fork() and make
+        the child call the function that traverses the directory while passing it the new directory. When doing this, we ended up resulting
+        in more Processes being made as it appeared as if we were looking through each directory twice. After testing and retesting, we
+        changed the process from having the new child call the function, to just changing the directory pointer, the DIR*. This would
+        prevent calling the function multiple times and therefore may stop and recursive issues we might have faced. This appeared to
+        have solved our issue as we were not creating too many processes and were traversing through the directories correctly.
+
+    Metadata:
+        The assignment required us to print out metadata after sorting all of the files. Included in this metadata is: the initial PID
+        The PIDs of all child processes, and the total number of proceses (not including the initial). To accomplish this, we thought
+        the best plan was to have each child write its PID to a file called PIDHOLDER.txt. PIDHOLDER.txt is created by the initial process
+        and thus allows each child to write to it. If the file already exists it is overwritten. After each process has exited and only the
+        initial process is left, it will print out its PID. Following this, it will then open PIDHOLDER.txt and output each of the PIDs
+        that are found in the file. During each of the prints, it will also keep track of how many it has printed out as this is the number
+        of processes that ran. Once it has printed out the final PID, it then prints "\b \b" which goes back a prints a space to remove
+        the trailing comma, and then goes back one more character again. This makes the output look cleaner so we do not have an extra
+        comma. Following this, it then prints out the counter that it has been keeping track of. This should be an accurate count of
+        how many processes have been created.
+        
+        Issues: When dealing with the metadata we faced some issues as well as had other issues for other parts appear. When originally
+        printing to the file, we started having duplicate PIDs appear. This would then cause some PIDs to be printed more than once
+        at the end output as well as the total number being increased. This was solved by using fflush(). Our hypothesis is that when
+        printing to the file, the stream might not print to it right away and if another process is created, it also copies over the
+        stream and thus the PID that is currently in it. Thus, this can create some duplicates as the new process will now print out
+        its PID and the PID that was already in the stream. The original process will also print out its PID, thus creating duplicates.
+        However, when we fflush(), the stream does not contain the PID anymore and thus won't be printed out more than once.
+        Another issue that we appeared to have found is having a larger amount of PIDs than expected. We had many different ideas as to why
+        this is occuring and concluded that it was because we were calling our directory traversing function. After switching from making the
+        children call the function to making the child switch the DIR* to the new directory, it appeared as though the correct number of PIDs
+        was being printed out.
+
+    Sorting:
+        Using the previous assignment as our base, we utilized mergesort to sort each of the valid CSV files. This was done by finding the value
+        we are sorting on, and creating a linked list. In our Node struct, it contains the value we are sorting by, the row that the value comes from
+        as well as a pointer to the next Node. After creating the linked list of unsorted values, we identify if we are sorting numerics or 
+        characters by looking at each value and checking to see if there are any characters present. If there are, then we sort by characters and treat
+        the values as characters. If there are no characters then we treat each value as a numeric. After identifying this, we then pass the linked
+        list to our mergesort. It then sorts numbers in increasing order as well as characters/strings lexicographically. It then returns the ordered
+        list to our sorter file which then outputs it. This is done by utilizing the fact that we stored the whole row inside the Node. Since the list
+        is in order, we can just traverse the linked list and output the row data which contains all of the information.
+        Due to sorter being a function that we need to call now, we had to make some changes from the original project. This included making sorter a
+        function that takes in different parameters, such as outputFile, sourceFile, and column (value we are sorting by). Along with this, we had to
+        change how some of our values were saved as it used argv since in the first project these values were given by the command line. Next, we had
+        to change how the sorter recieved the information. Instead of piping in the data via "|" in the command line, we had to open a file
+        and read it via that. On the same note, we had to change how the data was outputted as previously it was just printed to stdout and then
+        piped to another file via ">". However instead we had it print directly to the given output file.
+
+Testcases:
+    Due to the nature of the project including topics such as file handling, directory traversing, and mutli-processing, we created many testcases
+    to test each part separately. 
+
+    File Handling + Directory Traversing:
+        Since we both had little to no experience traversing directories programmatically we decided this was going to be one of the first areas we
+        wanted to work on. Using dirent.h and DIR*s, we made a recursive function that goes into a given directory and prints out all files in it while
+        also calling itself on any subdirectories. This then acts as a "cd" and "ls" command and is a basis for how we move around the directories.
+        Some of our testcases involve multiple level directories. For example: (d-represents a directory, f-represents a file)
+                                                                           d0
+                                                                            |
+                                                                   f0--f1--f2--f3--d1
+                                                                                    |
+                                                                               f4--d2--d3
+                                                                                    |   |
+                                                                                    f5  f6
+        We created this testcase in order to see if we could properly crawl through each directory and determine what is a file and what is a subdirectory.
+        Once we were able to determine what it was, we were able to print out their names, as well as the path to the file/directory, and then if it was a 
+        directory, call the function again on the new directory in order to traverse down.
+        Another example that we did to test depth: 
+                                           |----d7--|----d9
+                         |----d4--|----d6--|
+                |----d1--|                 |----d8
+                |                          
+            d0--|----d2--|----d5
+                |
+                |----d3
+
+        This testcase was created in order to test cases with many subdirectories. We wanted to see if our algorithm would work when traversing deep.
+    
+    Reading Flags:
+        When dealing with flags and the command parameters, we tested it separately at first. This just included testing out if we were able to make
+        it location independent. Furthermore, we wanted to test if we could make "-c" a mandatory flag and not having to include "-d" and "-o".
+        This was done rather quickly and after testing different examples, we implemented it into our project. Examples include:
+        ./readFlags -c color -d start -o end
+        ./readFLags -c color -o end -d start
+        ./readFlags -d start -o end
+        ./readFlags -c color -d start
+        ./readFlags -c color -o end
+        ./readFlags -c color
+        All of these testcases, besides the one that does not include "-c", would return the correct values.
+
+    Multi-Processing:
+        Although we understand the idea and usage of fork() in theory, we never tested it out before besides in class. So, the multi-processing part of
+        the project is one that we wished to test a lot. In order to do this we tested forking on its own, as well as collecting the metadata, as we wanted
+        to confirm out basic understanding of fork()ing as well as multi-processing. In our test files, we would fork() multiple times and have parents wait
+        for their children to finish running. This encompassed the child writing its PID to a file and then exiting itself. After figuring out the looping
+        mechanisms for wait()ing, we wished to apply it to our actual project.
+        Examples:
+        ./metadata
+        In our case this would fork() 5 times and each, except the first process, would add its PID to the PIDHOLDER.txt. After, the initial process would then
+        print out:
+        Initial: (the initial process' PID)
+        Children PIDs: (list of children PIDs)
+        Number of Processes: (number of processes not including the initial)
+        This appeared to work correctly and thus we implemented it into our project.
+            
+    Project Testcases:
+        After putting together the spearate parts of our project, we came up with testcases to test the functionality of the assignment as a whole. This just included
+        making testcases with a lot of directories, a lot of files (not just CSV files but also TXT), and including (as well as not including) the "-d" and "-o".
+        One of our testcases include:
+              |----hell.csv
+              |
+        test--|----f1--|----hellinf1.txt
+
+        Using this simple testcase we would run: ./scannerCSVsorter -c color -d test
+        Using the given command, our program would go into test and look at hell.csv. After fork()ing, our file handler sees that the file is a CSV and is valid, and thus
+        sorts it. It then outputs the sorted file into a new file called hell-sorted-color.csv in the same directory as hell.csv (this is because -o was not specified). That child
+        then terminates. While this is going on, the main process/program moved to f1 and saw that it was a directory. It then fork()ed and made its child traverse into it.
+        The child then sees that hellinf1.txt and fork()s. The new child then notices that it is not a CSV file and thus does nothing and exits. This makes the child that is
+        working on f1 finish waiting, as its child was done, and exit itself. After exiting itself, our main process finishes waiting as its two children, the process that sorted
+        hell.csv and the process that traversed f1, both returned and thus it was able to print out the metadata itself and finally exit. What was printed to stdout was:
+        Initial PID: (initial PID)
+        Children PIDs: (Child PID), (Child PID), (Child PID)
+        Number of Processes: 3
+
+        Another testcase includes:
+        
+               |----file0.csv
+               |
+               |----file1.csv
+               |
+               |
+        test2--|----file2.csv
+               |
+               |        |----colors.csv
+               |----d0--|
+               |        |----example.csv
+               |
+               |        |----csv1.csv
+               |----d1--|
+                        |----csv2.csv
+                        |
+                        |----hello2.txt
+                        |
+                        |----hello.txt
+                        |
+                        |----d2--|----fileee.csv
+                                 |
+                                 |----d3--|----hello.csv
+
+        Using this simple testcase we would run ./scannerCSVsorter -c color -d test2
+        Using this given command, our program would go into test2 and traverse the three files as well as the two directories. In all three of the files, the children identify
+        that the files are CSV files but they are not valid. In file0 the only header is director_name and since we sorting by color this file will not be sorted. In file1, 
+        one of the column names in the header is not one that is valid so it is not sorted. In file2, the second row does not have the correct number of columns and thus will
+        not be sorted. Thus, all three of these childrens will exit() as they do not have to sort. The child that is fork()ed for d0, traverses the directory. It seems two files
+        and fork()s for both. For colors.csv, the child sees it is a valid CSV and sorts it and outputs colors-sorted-color.csv in the same directory. It also looks at example.csv
+        and notices that it is a valid CSV and thus outputs example-sorted-color.csv. After sorting both files and creating the new files, the two children exit() and thus the child
+        that is working on d0 finishes waiting and exit()s itself. Next, the 5th child of the initial process traverses d1 and finds 5 things. The first 4 are files and the last being
+        a directory. For csv1.csv, the child notices that it is a CSV but it is not valid. This is because there is an extra column in one of the rows so the file is not sorted. 
+        Thus, this child exit()s. The next child notices that csv2.csv is a valid CSV and thus sorts it and creates csv2-sorted-color.csv. After creating the sorted file it exit()s
+        itself. The next child notices that hello2.txt is not a CSV and exit()s. The next child notices that hello.txt is not a CSV and exit()s. The final child looks at d2 and traverses
+        the directory and sees a file and a subdirectory. It notices that fileee.csv is valid and sorts it creating fileee-sorted-color.csv and then exit()s. It then sees d3 and fork()s
+        and that child now sees hello.csv which is valid. hello-sorted-color.csv is created and then the child exit()s. After this child exit()s, the child traversing d3 is done waiting
+        and exit()s itself. After this, the child traversing d2 is done waiting and exit()s itself. After this, the child traversing d1 stops waiting and exit()s itself. This then causes
+        the main process to finish waiting and then print out the metadata. What was printed to stdout was:
+        Initial PID: (initial PID)
+        Children PID: (Child PID), (Child PID), (Child PID), ..., (Child PID)
+        Number of Processes: ~17
+        
+        After testing it many times we believe that it can handle many different testcases.
+
+Submission Files:
+    The files that we are submitting are as follows: Makefile, scannerCSVsorter.c, scannerCSVsorter.h, mergesort.c, fileHandler.c, and sorter.c
+
+    Makefile:
+        A Makefile that compiles our code
+    
+    scannerCSVsorter.c:
+        The file that deals with the directory traversing as well as the fork()ing. It utilizes both fileHandler.c and scannerCSVsorter.h. It is the file that compiles to make the executable.
+
+    scannerCSVsorter.h:
+        Contains our node struct, our comparators for mergesort, our delcaration for mergesort.c, as well as some declarations for fileHandler.c.
+
+    mergesort.c:
+        This file contains our mergesort algorithm. It utilizes the node struct as well as the comparators found in scannerCSVsorter.h. It sorts a given linked list (from sorter.c) in either
+        ascending order or lexicographically (depending on if the values are numerics or strings).
+    
+    fileHandler.c:
+        This file checks to see if the given file is a CSV file and if it is valid. If those are true, it then passes the file to sorter.c.
+
+    sorter.c:
+        This file is the updated version of Asst0. It is passed a valid CSV file from fileHandler.c and then creates the linked list of all of the values and their
+        corresponding rows. After creating the list and figuring out if it is sorting either a numeric or a string, it passes this non-sorted linked list to mergesort.c.
+
+Running the Program:
+    After running the Makefile in order to compile the code, one should type:
+    ./scannerCSVsorter -c <what to sort by> -d <start directory> -o <output directory>
+    Both -d and -o do not need to be included but can be.
+

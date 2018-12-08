@@ -1,0 +1,276 @@
+Assignment 2
+
+Multi-Thread CSV Sorter
+
+Systems Programming Fall 2018
+Professor Francisco
+Created by: Alfonso Buono and Amulya Mummaneni
+
+Abstract:
+    The objective of this assignment was to write a program that would
+    utilize multi-threading in order to sort a large amount of data.
+    Using file and directory handling, the program should traverse through
+    a given tree of directories in order to sort the relevant data.
+
+Introduction:
+    The project uses the first and second project as a base as it is needed to sort
+    each of the individual files. The project differs as we now are going to
+    deal with a directory of files, or other directories that in turn can hold
+    files or more directories, and we have to traverse through each and sort the
+    CSV files. Although this can be done with a single process crawling through each
+    directory and looking at each file one by one, the complexity of the assignment is
+    increased as multi-threading is required. When going through a directory, the current
+    process will pthread_create(), make another thread, for every file and directory it sees. From there,
+    the new thread will handle the file appropriately, which will be discussed below,
+    or traverse the new directory.
+
+Methodology:
+
+    Reading Flags/Parameters:
+        The initial part of the assignment that was to be handled was regarding the use of 
+        parameters and flags in the command line. For this project we are using three flags:
+        "-c", "-d", and "-o". "-c" corresponds to the column of the file we should be sorting
+        on. For example, we would type "-c color". This would make us sort all of the valid
+        CSV files by "color". The "-c" flag is required for the program to run and if it is not
+        included, will cause a fatal error and prompt the user to include the "-c" and a header to
+        sort by. Next, "-d" corresponds to the start directory. This flag is not required and if
+        it is not included, the program automatically assumes that the start directory is the current
+        directory that the program is in, "./". However, if the flag is indeed included, then the 
+        program will use the given path and start at that given directory. If the given directory
+        is not valid, as in it does not exist or we do not have reading/writing permissions, the
+        program will throw a fatal error and will prompt the user to include a correct directory.
+        The last flag "-o" corresponds to the end directory. The flag is not required and if it
+        is not included, the program will automatically assume that the sorted CSV files will be
+        placed in the same directory as the file that is being sorted, the source file. If the flag
+        is included, then all of the sorted CSV files will be placed in that output directory, if
+        the directory is valid. The directory is considered valid if it exists and we have permissions
+        to read/write allowing us to put files inside the directory. If the directory is not valid,
+        the program will throw a fatal error and will exit, prompting the user to input a valid
+        output directory.
+
+        Our handling of the flags was done location independent. This means that as long as the flags
+        are there, no matter the location or ordering, the program should run (assuming the parameters
+        are correct). This was done by searching argv for the three flags. If "-c" is not present,
+        the program will throw a fatal error and close. However, if the flag is present then it will
+        look at the value immediately following the location of the flag. This should contain the proper
+        parameter that corresponds to its flag. For the "-d" and "-o" flag, the value following them
+        is then tested to see if the value is valid. If the directory is not, then the program closes.
+
+    Validity of Directories:
+        The "-d" and "-o" parameters are checked for validity by creating a DIR* pointer using 
+        opendir(). When given the path, opendir() will return a pointer to the directory and allow
+        for traversing. However, if the directory does not exist or we do not have permission to view
+        or write, then opendir() returns NULL. This allows us to check whether or not the directory is
+        valid. From this if it is not valid, it allows us to either exit the program and prompt the
+        user to input correct directories or if it is valid, continue running.
+
+        If the complete path to the directory is not provided, such as we are only given the name of the
+        directory (like "result"), then we traverse through all of the directories from the current location
+        (where the file is being run from) and see if there is a matching name. If there is, then this path
+        is essentially used throughout the program.
+
+    Valid CSV File:
+        Previously the validty of a CSV file is mentioned but not explained. As discussed in class, a CSV file is valid
+        if all of the columns in the header row are a subset of the list given to us. If there is inclusion of a category
+        that is not expected, then the file is not considered to be valid. The file is also checked to make sure that there 
+        are no errors in the file itself. Another check is whether or not the file is sorted already. This is done by checking 
+        the name of the file and seeing if "-sorted-" is found. If it is, then the file is not considered valid as it is already 
+        sorted. This definition of being valid differs from the last assignment as in this project it is accepted if the header
+        we are sorting by is not in the file. This is because we add all of the missing headers (from the list of 28 provided to us)
+        and fill all of the data as empty. This also plays into the number of commas in a row. If there are too many columns in a row
+        it is considered invalid.
+
+    File Handling:
+        Due to the program crawling through directories and looking at each file in the current directory, we only
+        care about CSV files. Although a thread is created, using pthread_create(), for each file we hit, the thread checks to see if it is
+        a CSV file. This is done by going to the last 4 characters of the file name and seeing if it matches ".csv". If it does,
+        then we know that the file is a CSV and we check the validity of the CSV file. If it is valid, then the thread sorts the file.
+        This assignment differs from the last as instead of each sorted list being put into their own sorted file, all of the data is being
+        put together and sorted. Once all of the files are done being sorted, the final large sorted list of data is then outputted into one
+        file named Allfiles-sorted-<fieldname>.csv. The location of this file is either created in the current directoy (if the -o flag is not
+        present) or the directory given by the -o flag. 
+
+    Handling Missing Headers:
+        Due to the new aspect in this assignment being that CSV files are still valid even if they do not contain the data that you are sorting by,
+        we had to change an aspect of our program. This is being that we had to add a helper function that figures out which headers of the 28
+        are not currently in the file and add all of them as well as the correct amount of commas in each row. This is because following this
+        the data will be properly ordered (to the order given to us in the project description), that process is described below, and then sorted
+        based off of the data. All of the missing headers are given null values in each row. This helper function was done by traversing the first line
+        of the file and comparing each header to the list of 28. If it matched any of the 28 then that header is checked off (if there is another
+        instance of that header in the list then the CSV is not valid). This process is repeated until all of the headers in the first line are done.
+        The remaining headers are then added to the end in order. The number of headers that had to be added is kept track and then the number of commas
+        added to that row must add up to the correct number of commas in total (27).
+
+    Rearranging Data:
+        This aspect of the project took longer than I originally anticipated. Since every file's data was going to be added to two global lists
+        there had to be a default order that each smaller list (that is going to be added to the global one) should follow as once each list is added
+        the two final global lists are then sorted themselves. So, the order that is found in the project description given to us is what was used.
+        Since the headers, and their corresponding data, can be in any order we had to write a helper function that worked with the helper function
+        mentioned above that adds the missing headers and commas. This function would take the new set of all headers and a corresponding row, and sort
+        them. Since each header has a "correct" index to go to, we would just find out which index it needs to go to and then mirror that movement with the
+        data that is in the given row. This is to keep the data in the correct spot/column.
+
+    Directory Handling:
+        When encountering sub-directories the program pthread_create()'s and creates a new thread that will traverse that new directory.
+        This is done in order to utilize multi-threading and increase the speed at which all of the files are sorted. This aspect
+        of the project increased the difficulty for us as we ran into some issues. When finding a directory, we would pthread_create() and make
+        the thread call the function that traverses the directory while passing it the new directory. It appears as though this process
+        works as we did not face issues except initially having issues of not traversing to the bottom level. This was due to a simple typo
+        that resulted in not going to the bottom level.
+
+********    Metadata:
+        The assignment required us to print out metadata after sorting all of the files. Included in this metadata is: the initial PID
+        The PIDs of all child processes, and the total number of proceses (not including the initial). To accomplish this, we thought
+        the best plan was to have each child write its PID to a file called PIDHOLDER.txt. PIDHOLDER.txt is created by the initial process
+        and thus allows each child to write to it. If the file already exists it is overwritten. After each process has exited and only the
+        initial process is left, it will print out its PID. Following this, it will then open PIDHOLDER.txt and output each of the PIDs
+        that are found in the file. During each of the prints, it will also keep track of how many it has printed out as this is the number
+        of processes that ran. Once it has printed out the final PID, it then prints "\b \b" which goes back a prints a space to remove
+        the trailing comma, and then goes back one more character again. This makes the output look cleaner so we do not have an extra
+        comma. Following this, it then prints out the counter that it has been keeping track of. This should be an accurate count of
+        how many processes have been created.
+        
+        Issues: When dealing with the metadata we faced some issues as well as had other issues for other parts appear. When originally
+        printing to the file, we started having duplicate PIDs appear. This would then cause some PIDs to be printed more than once
+        at the end output as well as the total number being increased. This was solved by using fflush(). Our hypothesis is that when
+        printing to the file, the stream might not print to it right away and if another process is created, it also copies over the
+        stream and thus the PID that is currently in it. Thus, this can create some duplicates as the new process will now print out
+        its PID and the PID that was already in the stream. The original process will also print out its PID, thus creating duplicates.
+        However, when we fflush(), the stream does not contain the PID anymore and thus won't be printed out more than once.
+        Another issue that we appeared to have found is having a larger amount of PIDs than expected. We had many different ideas as to why
+        this is occuring and concluded that it was because we were calling our directory traversing function. After switching from making the
+        children call the function to making the child switch the DIR* to the new directory, it appeared as though the correct number of PIDs
+        was being printed out.
+
+    Sorting:
+        Using the previous assignment as our base, we utilized mergesort to sort each of the valid CSV files. This was done by finding the value
+        we are sorting on, and creating a linked list. In our Node struct, it contains the value we are sorting by, the row that the value comes from
+        as well as a pointer to the next Node. After creating the linked list of unsorted values, we identify if we are sorting numerics or 
+        characters by looking at each value and checking to see if there are any characters present. If there are, then we sort by characters and treat
+        the values as characters. If there are no characters then we treat each value as a numeric. After identifying this, we then pass the linked
+        list to our mergesort. It then sorts numbers in increasing order as well as characters/strings lexicographically. It then returns the ordered
+        list to our sorter file which then outputs it. This is done by utilizing the fact that we stored the whole row inside the Node. Since the list
+        is in order, we can just traverse the linked list and output the row data which contains all of the information.
+        Due to sorter being a function that we need to call now, we had to make some changes from the original project. This included making sorter a
+        function that takes in different parameters, such as outputFile, sourceFile, and column (value we are sorting by). Along with this, we had to
+        change how some of our values were saved as it used argv since in the first project these values were given by the command line. Next, we had
+        to change how the sorter recieved the information. Instead of piping in the data via "|" in the command line, we had to open a file
+        and read it via that. On the same note, we had to change how the data was outputted as previously it was just printed to stdout and then
+        piped to another file via ">". Furthermore, last project had us print each sorted list to the corresponding sorted file. However, this time
+        instead of printing the data out we added each sorted list to their corresponding global list. The list of null values from the file is added
+        to the front of the global list of nulls and the list of sorted values from the file is added to the global list of values. This global list
+        was kept mutexed to prevent issues with multiple threads messing with the data at the same time. Once all of the threads close, the program
+        then prints the two lists into the final output file.
+
+Testcases:
+    Due to the nature of the project including topics such as file handling, directory traversing, and mutli-processing, we created many testcases
+    to test each part separately. 
+
+    File Handling + Directory Traversing:
+        Since we both had little to no experience traversing directories programmatically we decided this was going to be one of the first areas we
+        wanted to work on. Using dirent.h and DIR*s, we made a recursive function that goes into a given directory and prints out all files in it while
+        also calling itself on any subdirectories. This then acts as a "cd" and "ls" command and is a basis for how we move around the directories.
+        Some of our testcases involve multiple level directories.
+        For example: (d-represents a directory, f-represents a file)
+                                                                           d0
+                                                                            |
+                                                                   f0--f1--f2--f3--d1
+                                                                                    |
+                                                                               f4--d2--d3
+                                                                                    |   |
+                                                                                    f5  f6
+        
+        We created this testcase in order to see if we could properly crawl through each directory and determine what is a file and what is a subdirectory.
+        Once we were able to determine what it was, we were able to print out their names, as well as the path to the file/directory, and then if it was a 
+        directory, call the function again on the new directory in order to traverse down.
+        Another example that we did to test depth: 
+                                           |----d7--|----d9
+                         |----d4--|----d6--|
+                |----d1--|                 |----d8
+                |                          
+            d0--|----d2--|----d5
+                |
+                |----d3
+
+        This testcase was created in order to test cases with many subdirectories. We wanted to see if our algorithm would work when traversing deep.
+    
+    Reading Flags:
+        When dealing with flags and the command parameters, we tested it separately at first. This just included testing out if we were able to make
+        it location independent. Furthermore, we wanted to test if we could make "-c" a mandatory flag and not having to include "-d" and "-o".
+        This was done rather quickly and after testing different examples, we implemented it into our project. Examples include:
+        ./readFlags -c color -d start -o end
+        ./readFLags -c color -o end -d start
+        ./readFlags -d start -o end
+        ./readFlags -c color -d start
+        ./readFlags -c color -o end
+        ./readFlags -c color
+        All of these testcases, besides the one that does not include "-c", would return the correct values.
+
+    Multi-Threading:
+        Although we understand the idea and usage of pthread_create() in theory, we never tested it out before besides in class. So, the multi-threading part of
+        the project is one that we wished to test a lot. In order to do this we tested threading on its own, as well as collecting the metadata, as we wanted
+        to confirm out basic understanding of pthread_creating()ing as well as multi-threading. Although there are parallels to multi-processing, multi-threading
+        appeared to be more difficult as the shared heap and data caused issues. We did not want to have issues and thus had to mutex the global linked list that
+        we were adding all of the data to. If we did not, then there were problems with some data not being added or removed since multiple threads were reading and
+        writing at the same time. Another issue was having to pass multiple parameters both the file handler and the directory handler. In order to do this you have
+        to create a struct that contains this data and pass this into the function pointer given to pthread_create(). Furthermore, we needed the return values from
+        file handler as this data was going to be added to the global linked list. Due to this, we had to create a middleman function that we would pass to the 
+        pthread_create() and itself call file handler. This is because we cannot get the return value from the function called by pthread_create(). 
+            
+*****Project Testcases:
+
+Error Handling:
+    As told in class, when we face a non-fatal error we use perror() to print out error into stderror. This can occur when files
+    are not CSVs or when they are not valid. This can also occur when threads are not being made correctly.
+    Fatal errors are typically only if the given start directory/end directory does not exist, as well as if the -c flag is not given
+    or is not one of the supported headers (of the 28 provided).
+
+*****Submission Files:
+    The files that we are submitting are as follows: Makefile, Asst2Doc.txt, Analysis.pdf, multiThreadSorter.h, multiThreadSorter.c, fileHandler.c, sorter.c,
+    mergesort.c, csvOrder.c, and giveOutput.c
+
+    Makefile:
+        A Makefile that compiles our code   
+
+    mergesort.c:
+        Our mergesort function that we have used for the past two projects. It recieves a linked list and using the mergesort algorithm sorts the linked list and returns it
+
+    multiThreadSorter.h:
+        Our main header file, this file contains our typedef structs (which include our node for the linked lists, a tuple we utilize in order to return two lists
+        from our sorting functions as well as two parameter structs that are needed in order to provide parameters for our handling calls from pthread_create().
+        We also have some prototype functions declared in the header file. This includes a function to learn if a data type is a number or a string, as well as our 
+        two comparator functions. These prototype functions are needed in order to declare some of the functions we are utilizing
+
+    multiThreadSorter.c:
+        This is our main program. It utilizes other files in order to sort .CSV files and produce a final file with all of the data sorted. This is done
+        using multi-threading and uses mergesort to sort the data. 
+
+    fileHandler.c:
+        This file checks to see if the given file is a CSV file. If it is not, then it returns and informs the program that this file is not.
+        It also checks to see if .CSV files are valid. Validity is defined as the headers being a subset of the given headers. If the file is a valid .CSV
+        the file is then passed to sorter.c
+
+    sorter.c:
+        This file is the updated version of our previous sorter.c which was an updated version of Asst0. It is passed a file and the column that we are
+        sorting on. It creates two linked lists, one of the null data and one of the actual data. It then sends the data list to our mergesort
+        which then returns the newly sorted list. Once this is finished the sorter function then returns a tuple that we defined that
+        contains both the null list and the newly sorted data list.
+
+    Analysis.pdf:
+        This file contains our comparison of multi-threading vs multi-processing. It discusses the results of our two programs and 
+        also answers the questions that were asked by Professor.
+
+    csvOrder.c:
+        This file contains the two helper functions that adds the missing headers as well as their corresponding null cols in order for us to 
+        create our list. It also contains the helper function that correctly orders the columns so that they follow the standard order
+        that was given to us in the project description.
+
+    giveOutput.c:
+        This file contains the helper function that finds the path to the given directory we are searching for. If the directory is not found
+        then the function returns "fail" which allows us to throw a fatal error as we the directory does not exist.
+
+Running the Program:
+    After running the Makefile in order to compile the code, one should type:
+    ./scannerCSVsorter -c <what to sort by> -d <start directory> -o <output directory>
+    Both -d and -o do not need to be included but can be.
+
