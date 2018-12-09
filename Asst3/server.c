@@ -91,6 +91,16 @@ char* command_param(int commandNum,char* command){
 
     }else if(commandNum == 1){
         // serve
+        if(strlen(command) < 6 || command[5] != ' '){
+            // only have the serve command no name
+            // no space after command name
+            return "";
+        }
+        for(counter=6;counter<strlen(command);counter++){
+            buff[counter-6] = command[counter];
+        }
+        return buff;
+
     }else if(commandNum == 2){
         // deposit
     }else if(commandNum == 3){
@@ -177,14 +187,14 @@ void* client_service(void* params){
                 write(connfd,"Cannot create. In service\n",27);
             }else{
                 char* commandArg = (char*)malloc(sizeof(char)*MAX);
-                strcpy(commandArg, command_param(commandNum,buff));
 
-                if(strlen(buff) < 8){
+                if(strlen(buff) < 8 || buff[6] != ' '){
                     // either command had no space after create
                     // or the command was only create and had no name
                     write(connfd,"Please use create correctly\n",29);                    
                 }else{ 
-                    
+                    // change the value of command to just be the name in this case
+                    strcpy(commandArg, command_param(commandNum,buff));
                     account* tempAcc = find_account(commandArg);
                     if(tempAcc == NULL){
                         // name is not in use
@@ -210,11 +220,28 @@ void* client_service(void* params){
                     write(connfd,"Please use serve correctly\n",28);
                 }else{
                     if(inService == 0){
-                        inService = 1;
+                        char* commandArg = (char*)malloc(sizeof(char)*MAX);
+                        // get account name from command
+                        strcpy(commandArg, command_param(commandNum,buff));
+                        account* tempAcc = find_account(commandArg);
+                        // check to see if the account exists
                         // check to see if the service is in session from another user
+                        if(tempAcc == NULL){ 
+                            // account doesnt exist
+                            write(connfd,"Account does not exist\n",24);
+                        }else if(tempAcc->session == 1){
+                            // account currently in use
+                            write(connfd,"Account is in use\n",19);
+                        }else{
+                            // set local variable equal to the account in use
+                            acc = tempAcc;
+                            acc->session = 1;
+                            inService = 1;
+                            write(connfd,"Account now in session\n",24);
+                        }                        
 
                     }else{
-                        write(connfd,"Service already in session\n",28);
+                        write(connfd,"Please end current session to serve another account\n",53);
                     }                
                 }
 
@@ -276,7 +303,7 @@ void* client_service(void* params){
                                         inService = 0;
                                         // set the account that was previously being serviced to not in service
                                         acc->session = 0;
-                                        acc = NULL;
+                                        //acc = NULL;
                                         write(connfd,"Service session ended\n",23);
                                     }else{
                                         write(connfd,"No account in service\n",23);
