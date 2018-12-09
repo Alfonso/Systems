@@ -24,6 +24,7 @@ typedef struct _clientP{
     int connfd;
 } clientP;
 
+
 // this function takes in a string that the user writes to the server
 // and returns:
 // 0 -> Create
@@ -64,7 +65,75 @@ int commandCheck(char* command){
     return -1;
 }
 
+// this function receives the output from commandCheck and the string
+// it then figures out if the trailing part is correct.
+// Returns the string after the command
+char* command_param(int commandNum,char* command){
+    int counter=0;
+    char* buff = (char*)malloc(sizeof(char)*MAX);
+    bzero(buff,MAX);
 
+    if(commandNum == 0){
+        // create
+        // returns "" if there is no word after create
+        // or there is no space after create
+        if(strlen(command)<7 || command[6] != ' '){
+            // only have create in command. No name
+            // NO SPACE AFTER COMMAND NAME WHAT TO DO
+            return "";
+        }
+        for(counter=7;counter<strlen(command);counter++){
+            buff[counter-7] = command[counter];
+        }
+
+        // *********************************************************** do i have to check if the characters are not alphanumeric??
+        return buff;
+
+    }else if(commandNum == 1){
+        // serve
+    }else if(commandNum == 2){
+        // deposit
+    }else if(commandNum == 3){
+        // withdraw
+    }else if(commandNum == 4){
+        // query
+        if(strlen(command) < 6)
+            return "";
+        else
+            return "error";
+    }else if(commandNum == 5){
+        // end
+        if(strlen(command) < 4){
+            return "";
+        }else{
+            return "error";
+        }
+    }else if(commandNum == 6){
+        // quit
+
+        if(strlen(command) < 5){
+            return "";
+        }else
+            return "error";
+    }
+
+    return "";
+}
+
+// this function searches the list for the given name and returns the
+// ptr to the account
+// returns null if it does not exist
+account* find_account(char* name){
+    account* ptr = head;
+
+    while(ptr!=NULL){
+        if(strcmp(ptr->name,name) == 0)
+            return ptr;
+        ptr = ptr->next;
+    }
+
+    return NULL;
+}
 
 // whenever a client connects, a thread should be spawned
 // and this function will deal with the commands input from the client
@@ -73,7 +142,7 @@ void* client_service(void* params){
     // for checking to see if a client is in service because if they are
     // they cannot create accounts
     int inService = 0;    
-    //account* acc = (account*)malloc(sizeof(account));
+    account* acc = (account*)malloc(sizeof(account));
 
 
     clientP* test = (clientP*)params;
@@ -82,75 +151,167 @@ void* client_service(void* params){
     char buff[MAX];
     bzero(buff,sizeof(buff));  
 
+    int newLineC =0;
 
     // constantly waiting to hear from a client
     for(;;){
         // read what the client is saying
         bzero(buff,sizeof(buff));
         read(connfd,buff,MAX);
-        printf("Client %d says: %s",connfd,buff);
+        // loop through getting rid of newlines
+        for(newLineC=0;newLineC<strlen(buff);newLineC++)
+            if(buff[newLineC] == '\n')
+                buff[newLineC] = '\0';
 
         // manipulate the buffer in order to figure out
         // what command they want to do
         int commandNum = commandCheck(buff);
 
         if(commandNum == 0){
-            write(connfd,"\nCreate command received\n",26);
+            //write(connfd,"\nCreate command received\n",26);
             // have to mutex account creation
             // initial balance is 0
+
             // A client who is in service cannot create an account
             if(inService == 1){
-                write(connfd,"\nCannot create. In service\n",28);
+                write(connfd,"Cannot create. In service\n",27);
             }else{
+                char* commandArg = (char*)malloc(sizeof(char)*MAX);
+                strcpy(commandArg, command_param(commandNum,buff));
+
+                if(strlen(buff) < 8){
+                    // either command had no space after create
+                    // or the command was only create and had no name
+                    write(connfd,"Please use create correctly\n",29);                    
+                }else{ 
+                    
+                    account* tempAcc = find_account(commandArg);
+                    if(tempAcc == NULL){
+                        // name is not in use
+                        tempAcc = (account*)malloc(sizeof(account));
+                        strcpy(tempAcc->name, commandArg);
+                        tempAcc->balance = 0;
+                        tempAcc->session =0;
+                        tempAcc->next = head;
+                        head = tempAcc;
+                        write(connfd,"Account created\n",17);
+                    }else{
+                        // name is already used
+                        write(connfd,"Name is already in use\n",24);
+                    }
+
+                }
                 
             }
         }else if(commandNum == 1){
-                write(connfd,"\nServe command received\n",25);
+                //write(connfd,"\nServe command received\n",25); // this needs to be commented out
                 // run through second command checker
-                
+                if(strlen(buff) < 7){
+                    write(connfd,"Please use serve correctly\n",28);
+                }else{
+                    if(inService == 0){
+                        inService = 1;
+                        // check to see if the service is in session from another user
+
+                    }else{
+                        write(connfd,"Service already in session\n",28);
+                    }                
+                }
+
             }else if(commandNum == 2){
-                    write(connfd,"\nDeposit command received\n",27);
+                    //write(connfd,"\nDeposit command received\n",27);
                     // run through second command checker
+                    if(strlen(buff) < 9){
+                        write(connfd,"Please use deposit correctly\n",30);
+                    }else{
+                        if( inService == 1){
+
+                        }else{
+                            // not in session so cant do command
+                            write(connfd,"No account in service\n",23);
+                        }
+                    }
 
                 }else if(commandNum == 3){
-                        write(connfd,"\nWithdraw command received\n",28);
+                        //write(connfd,"\nWithdraw command received\n",28);
                         // run through second command checker
+                        if(strlen(buff) < 10){
+                            write(connfd,"Please use withdraw correctly\n",31);
+                        }else{
+                            if(inService == 1){
+
+                            }else{
+                                // not in session so cant do command
+                                write(connfd,"No account in service\n",23);
+                            }
+                        }
 
                     }else if(commandNum == 4){
-                            write(connfd,"\nQuery command received\n",25);
+                            //write(connfd,"\nQuery command received\n",25);
                             // run through second command checker
+                            if(strlen(buff) < 6){        
+                                if(inService == 1){
+                                    // initialize the string to 1000 bytes
+                                    char stroutput[1000];
+                                    bzero(stroutput,1000);
+
+                                    // convert the double to a string
+                                    sprintf(stroutput,"Balance: %lf\n",acc->balance);
+
+                                    write(connfd,stroutput,1000);
+      
+                                }else{
+                                    write(connfd,"No account in service\n",23);
+                                }
+                            }else{
+                                write(connfd,"Please use query correctly\n",28);
+                            }
 
                         }else if(commandNum == 5){
-                                write(connfd,"\nEnd command received\n",23);
+                                //write(connfd,"\nEnd command received\n",23); // write below isnt working if this write exists
                                 // run through second command checker
-                                
-                                if(inService == 1){
-                                    // set this client to not in service
-                                    inService = 0;
-                                    // set the account that was previously being serviced to not in service
-
+                                if(strlen(buff) < 4){        
+                                    if(inService == 1){
+                                        // set this client to not in service
+                                        inService = 0;
+                                        // set the account that was previously being serviced to not in service
+                                        acc->session = 0;
+                                        acc = NULL;
+                                        write(connfd,"Service session ended\n",23);
+                                    }else{
+                                        write(connfd,"No account in service\n",23);
+                                    }           
                                 }else{
-                                    write(connfd,"\nNo account in service\n",24);
-                                }                                
+                                    write(connfd,"Please use end correctly\n",26);
+                                }                     
 
                             }else if(commandNum == 6){
-                                    //write(connfd,"Quit command received\n",23);
+                                    //write(connfd,"Quit command received\n",23); // write below isnt oworking if this write exists
                                     // run through second command checker
                                     
-                                    if(inService == 1){
-                                        // turn account to not in service
+
+                                    if(strlen(buff) < 5){
+
+                                        if(inService == 1){
+                                            // turn account to not in service
+                                            acc->session  = 0;    
+                                            inService = 0;                   
+                                        }
+
+                                        // write to client and then break out of this loop so this thread goes away                        
                                         write(connfd,"Shutting down",14);
                                         break;
                                     }else{
-                                        write(connfd,"Shutting down",14);
-                                        break;
-                                    }                        
+                                        write(connfd,"Please use quit correctly\n",27);
+                                    }
                                 }else if(commandNum == -1){
-                                        write(connfd,"\nPlease input a proper command\n",32);
+                                        write(connfd,"Please input a proper command\n",31);
                                     }
 
         // This is a check to shut down or not
         if(shutDown == 1){
+            // have to turn all accounts to not in session
+
             write(connfd,"Server shutting down",21);
             break;
         }
@@ -158,6 +319,8 @@ void* client_service(void* params){
 
     }
 
+
+    // *************************************************************************************            DO I HAVE TO CLOSE THE SOCKET???
 
     return NULL;
 }
