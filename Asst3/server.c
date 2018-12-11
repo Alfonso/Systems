@@ -7,6 +7,9 @@ int shutDown = 0;
 // global linked list of all accounts
 account* head;
 
+// global acceptor thread id
+pthread_t acceptor_thread;
+
 // global linked list of all client threads
 threadID* threadHead;
 
@@ -20,6 +23,25 @@ void handle_sig(int sig){
     // SIGINT
     if(sig == SIGINT){
         shutDown = 1;
+
+        // kill the acceptor thread
+        pthread_cancel(acceptor_thread);
+        
+        // join the client threads
+        threadID* ptr = threadHead;
+        while(ptr != NULL){
+            pthread_join(ptr->id,NULL);
+            ptr = ptr->next;
+        }
+
+        // make every account not in session
+        // instead, should I free this memory?
+        account* accptr = head;
+        while(accptr != NULL){
+            accptr->session = 0;
+            accptr = accptr->next;
+        }    
+
     }else if(sig == SIGALRM){
         account* ptr = head;
         printf("ACCOUNTS:\n");
@@ -246,6 +268,26 @@ account* find_account(char* name){
     return NULL;
 }
 
+// this thread will check if the shutdown value has changed
+// if it has changed, it will send a shut down message to the client
+// and then the client will write back to the server telling it to shut down
+void* shutdown_check(void* params){
+    
+    clientP* test = (clientP*)params;
+    int connfd = test->connfd;
+
+    // should I sleep so it doesnt take up too much memory?
+
+    for(;;){
+        if(shutDown == 1){
+            write(connfd,"Server shutting down",21);
+            break;
+        }
+    }
+
+    return NULL;
+}
+
 // whenever a client connects, a thread should be spawned
 // and this function will deal with the commands input from the client
 void* client_service(void* params){
@@ -255,6 +297,9 @@ void* client_service(void* params){
     int inService = 0;    
     account* acc = (account*)malloc(sizeof(account));
 
+    // create thread that checks for shutdown
+    pthread_t shutdownID;
+    pthread_create(&shutdownID,NULL,shutdown_check,(void*)params);
 
     clientP* test = (clientP*)params;
     int connfd = test->connfd;
@@ -488,8 +533,8 @@ void* client_service(void* params){
         // This is a check to shut down or not
         if(shutDown == 1){
             // have to turn all accounts to not in session
-
-            write(connfd,"Server shutting down",21);
+            
+            //write(connfd,"Server shutting down",21);
             break;
         }
 
@@ -499,6 +544,9 @@ void* client_service(void* params){
 
     // *************************************************************************************            DO I HAVE TO CLOSE THE SOCKET???
     close(connfd);    
+
+    // join shutdown thread
+    pthread_join(shutdownID,NULL);
 
     return NULL;
 }
@@ -541,7 +589,7 @@ void* session_acceptor(void* params){
        printf("Socket successfully binded..\n"); 
   
     // Now server is ready to listen and verification 
-    if ((listen(sockfd, 10)) != 0) { 
+    if ((listen(sockfd, 100)) != 0) { 
         printf("Listen failed...\n"); 
         exit(0); 
     } 
@@ -572,16 +620,27 @@ void* session_acceptor(void* params){
             temp->next = threadHead;
             temp->id = thread_id;
         }
+
+/*              INSTEAD OF THIS, SIG HANDLER JUST KILLS THIS THREAD BECAUSE I COULDNT FIGURE OUT HOW TO HANDLE ACCEPT BLOCKING
+        if(shutDown == 1){
+            printf("SHUT DOWN RECEIVED IN ACCEPTOR THREAD\n");
+            break;
+        }
+*/
+
     }
     
     // ***********************************************************************          DO I HAVE TO JOIN ALL OF THE THREADS HERE?
     // I think so
 
+/*              INSTEAD OF JOINING ALL OF HTE THREADS HERE, THEY ARE JOINED IN THE SIG HANDLER
     threadID* ptr = threadHead;
     while(ptr != NULL){
         pthread_join(ptr->id,NULL);
         ptr = ptr->next;
     }
+*/
+
    
     return NULL;
 }
@@ -607,6 +666,15 @@ int main(int argc,char** argv) {
 
     // setting the sigINT handler
     //signal(SIGINT,handle_sig);
+
+    // do something to prevent the acceptor thread from not joining
+    // because accept is blocking
+    struct sigaction a;
+    a.sa_handler = handle_sig;
+    a.sa_flags = 0;
+    sigemptyset(&a.sa_mask);
+    sigaction(SIGINT,&a,NULL);
+
     // setting the sigalarm handler
     signal(SIGALRM,handle_sig);
 
@@ -622,7 +690,6 @@ int main(int argc,char** argv) {
     acceptor_param->port = atoi(argv[1]);
     
     // create the session_acceptor thread
-    pthread_t acceptor_thread;
     pthread_create(&acceptor_thread,NULL,session_acceptor,(void*)acceptor_param);
     pthread_join(acceptor_thread,NULL);
 
@@ -632,5 +699,9 @@ int main(int argc,char** argv) {
     it_val.it_interval = it_val.it_value;
     setitimer(ITIMER_REAL,&it_val,NULL);
 
-    return 0;
+    printf("\b\bSERVER SHUT DOWN\n");
+
+    return 0; 
+
+
 }

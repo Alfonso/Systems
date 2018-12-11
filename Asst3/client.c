@@ -55,6 +55,7 @@ void* output_func(void* params){
         // different outputs
         if(strcmp(buff,"Server shutting down") == 0){
             printf("SERVER SHUTTING DOWN\n");
+            write(sockfd,"shutdown recieved\n",19);
             break;
         }else if(strcmp(buff,"Shutting down") == 0){
                 printf("Shutting down\n");
