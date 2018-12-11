@@ -12,7 +12,9 @@
 #include<pthread.h>
 #include<sys/types.h>
 #include<signal.h>
+#include<sys/time.h>
 
+#define INTERVAL 15000
 #define MAX 300
 #define PORT 9153
 #define SA struct sockaddr
@@ -24,3 +26,8 @@ typedef struct _account{
     int session; // 0 means not in session 1 means in session
     struct _account* next;
 }account;
+
+typedef struct _threadID{
+    pthread_t id;
+    struct _threadID* next;
+}threadID;

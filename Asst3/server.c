@@ -7,14 +7,32 @@ int shutDown = 0;
 // global linked list of all accounts
 account* head;
 
+// global linked list of all client threads
+threadID* threadHead;
+
 // global mutexes
 pthread_mutex_t mutex;
 
 
 // this is gonna be the SIG handler
-void handle_sigint(int sig){
-    shutDown = 1;
-    kill(getpid(),1); 
+void handle_sig(int sig){
+    
+    // SIGINT
+    if(sig == SIGINT){
+        shutDown = 1;
+    }else if(sig == SIGALRM){
+        account* ptr = head;
+        printf("ACCOUNTS:\n");
+        while(ptr != NULL){
+            printf("%s\t%lf",ptr->name,ptr->balance);
+            if(ptr->session == 1){
+                printf("\tIN SERVICE\n");
+            }else{
+                printf("\n");
+            }
+            ptr = ptr->next;
+        }
+    }
 }
 
 
@@ -549,11 +567,21 @@ void* session_acceptor(void* params){
             client_param->connfd = connfd;
             // changing this so it can multi-thread?
             pthread_create(&thread_id,NULL,client_service,(void*)client_param);
+            // add the thread ID to the global list to join later
+            threadID* temp = (threadID*)malloc(sizeof(threadID));
+            temp->next = threadHead;
+            temp->id = thread_id;
         }
     }
     
     // ***********************************************************************          DO I HAVE TO JOIN ALL OF THE THREADS HERE?
+    // I think so
 
+    threadID* ptr = threadHead;
+    while(ptr != NULL){
+        pthread_join(ptr->id,NULL);
+        ptr = ptr->next;
+    }
    
     return NULL;
 }
@@ -578,9 +606,18 @@ int main(int argc,char** argv) {
     }
 
     // setting the sigINT handler
-    //signal(SIGINT,handle_sigint);
+    //signal(SIGINT,handle_sig);
+    // setting the sigalarm handler
+    signal(SIGALRM,handle_sig);
 
-
+    // setting the timer for SIGALRM
+    struct itimerval it_val;
+    it_val.it_value.tv_sec = INTERVAL/1000;
+    it_val.it_value.tv_usec = (INTERVAL*1000) % 1000000;
+    it_val.it_interval = it_val.it_value;
+    setitimer(ITIMER_REAL,&it_val,NULL);
+    
+    // struct to pass port to acceptor thread
     acceptorP* acceptor_param = (acceptorP*)malloc(sizeof(acceptorP));
     acceptor_param->port = atoi(argv[1]);
     
@@ -589,5 +626,11 @@ int main(int argc,char** argv) {
     pthread_create(&acceptor_thread,NULL,session_acceptor,(void*)acceptor_param);
     pthread_join(acceptor_thread,NULL);
 
+    // have to stop timer
+    it_val.it_value.tv_sec = 0;
+    it_val.it_value.tv_usec = 0;
+    it_val.it_interval = it_val.it_value;
+    setitimer(ITIMER_REAL,&it_val,NULL);
+
     return 0;
-} 
+}
