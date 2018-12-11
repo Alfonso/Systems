@@ -26,6 +26,9 @@ void* input_func(void* params){
         // read blocks?
         read(0,buff,MAX);
         write(sockfd,buff,sizeof(buff));
+
+        // sleep for 2 seconds to throttle the client input
+        sleep(2);
     }
 
     return NULL;

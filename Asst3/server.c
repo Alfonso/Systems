@@ -7,13 +7,16 @@ int shutDown = 0;
 // global linked list of all accounts
 account* head;
 
-/*
-// this is gonna be the SIGINT handler
+// global mutexes
+pthread_mutex_t mutex;
+
+
+// this is gonna be the SIG handler
 void handle_sigint(int sig){
     shutDown = 1;
     kill(getpid(),1); 
 }
-*/
+
 
 // struct to pass the port to the client acceptor function
 typedef struct _acceptorP{
@@ -144,6 +147,47 @@ char* command_param(int commandNum,char* command){
 
     }else if(commandNum == 3){
         // withdraw
+        // basically deposit but removing instead of adding
+        // the check for if they can remove that amount is going to be done in the client_thread
+        if(strlen(command) < 9 || command[8] != ' '){
+            // command is not formatted correct
+            // no space after the command name
+            return "";
+        }
+
+        // used to keep track of if there is more than one decimal point
+        int hasDecimal = 0;
+
+        // check if what is after the space is a digit. if it is return it
+        for(counter=9;counter<strlen(command);counter++){
+            // looking at this current char
+            char temp = command[counter];
+            // check to see if the character is either a digit or is '.'
+            if(isdigit(temp) != 0 || temp == '.'){
+                // character is either a digit or is a '.'
+                if(temp == '.'){
+                    // character is a '.'
+                    if(hasDecimal == 0){
+                        // this is the first decimal point
+                        hasDecimal = 1;
+                        buff[counter-9] = command[counter];
+                    }else if(hasDecimal == 1){
+                        // there has already been a decimal point
+                        // command is invalid
+                        return "";
+                    }
+                }else{
+                    // character is a digit        
+                    buff[counter-9] = command[counter];
+                }
+            }else{
+                return "";
+            }
+        }
+
+        // this theoretically should return the string version of the double 
+        return buff;
+
     }else if(commandNum == 4){
         // query
         if(strlen(command) < 6)
@@ -238,6 +282,10 @@ void* client_service(void* params){
                     account* tempAcc = find_account(commandArg);
                     if(tempAcc == NULL){
                         // name is not in use
+    
+                        // lock the accounts here so you can add a new one
+                        pthread_mutex_lock(&mutex);
+
                         tempAcc = (account*)malloc(sizeof(account));
                         strcpy(tempAcc->name, commandArg);
                         tempAcc->balance = 0;
@@ -245,6 +293,10 @@ void* client_service(void* params){
                         tempAcc->next = head;
                         head = tempAcc;
                         write(connfd,"Account created\n",17);
+
+                        //unlock the accounts here
+                        pthread_mutex_unlock(&mutex);
+
                     }else{
                         // name is already used
                         write(connfd,"Name is already in use\n",24);
@@ -302,7 +354,7 @@ void* client_service(void* params){
                             if(strcmp(commandArg,"") == 0){
                                 write(connfd,"Please use deposit correctly\n",30);
                             }else{
-                                // there is nothing valid about the input so convert the string to a double
+                                // there is nothing wrong about the input so convert the string to a double
                                 acc->balance = acc-> balance + atof(commandArg);
                                 
                                 write(connfd,"Successfully deposited\n",24);
@@ -320,7 +372,31 @@ void* client_service(void* params){
                             write(connfd,"Please use withdraw correctly\n",31);
                         }else{
                             if(inService == 1){
+                                // check so ee if they are actually sending over a number to withdraw from
+                                char* commandArg = (char*)malloc(sizeof(char)*MAX);
+                                bzero(commandArg,MAX);
 
+                                strcpy(commandArg,command_param(commandNum,buff));
+
+                                if(strcmp(commandArg,"") == 0){
+                                    write(connfd,"Please use withdraw correctly\n",31);
+                                }else{
+                                    // there is nothing wrong with the input so convert the string to a double
+                                    double tempWith = atof(commandArg);
+                                    // check to see if tempWith is greater than the current balance. If so, then only
+                                    // remove to 0
+                                    if(tempWith > acc->balance){
+                                        if(acc->balance == 0){
+                                            write(connfd,"Current balance is 0. Cannot withdraw\n",39);
+                                        }else{
+                                            acc->balance = 0;
+                                            write(connfd,"Withdrew maximum amount possible (account at 0)\n",49);
+                                        }
+                                    }else if(tempWith <= acc->balance){
+                                        acc->balance = acc->balance - tempWith;
+                                        write(connfd,"Successfully withdrawn\n",24);
+                                    }
+                                }            
                             }else{
                                 // not in session so cant do command
                                 write(connfd,"No account in service\n",23);
@@ -381,6 +457,8 @@ void* client_service(void* params){
 
                                         // write to client and then break out of this loop so this thread goes away                        
                                         write(connfd,"Shutting down",14);
+                                        // print to server that a client disconnected
+                                        printf("Client disconnected...\n");
                                         break;
                                     }else{
                                         write(connfd,"Please use quit correctly\n",27);
@@ -402,6 +480,7 @@ void* client_service(void* params){
 
 
     // *************************************************************************************            DO I HAVE TO CLOSE THE SOCKET???
+    close(connfd);    
 
     return NULL;
 }
@@ -465,7 +544,7 @@ void* session_acceptor(void* params){
             exit(0); 
         } 
         else{
-            printf("server acccept the client...\n"); 
+            printf("Client connected...\n"); 
             clientP* client_param = (clientP*)malloc(sizeof(clientP));
             client_param->connfd = connfd;
             // changing this so it can multi-thread?
