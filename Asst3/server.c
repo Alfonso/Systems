@@ -535,7 +535,7 @@ void* client_service(void* params){
                                         }
 
                                         // write to client and then break out of this loop so this thread goes away                        
-                                        write(connfd,"Disconnecting from server\n",27);
+                                        write(connfd,"Shutting down",14);
                                         // print to server that a client disconnected
                                         printf("Client disconnected...\n");
                                         break;

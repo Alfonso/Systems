@@ -58,7 +58,7 @@ void* output_func(void* params){
             write(sockfd,"shutdown recieved\n",19);
             break;
         }else if(strcmp(buff,"Shutting down") == 0){
-                printf("Shutting down\n");
+                printf("Disconnected from server\n");
                 break;
             }else{
                 printf(buff);
