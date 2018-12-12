@@ -465,12 +465,15 @@ void* client_service(void* params){
                                     // check to see if tempWith is greater than the current balance. If so, then only
                                     // remove to 0
                                     if(tempWith > acc->balance){
+                                        /*          CANT WITHDRAW MORE THAN YOU HAVE SO TELL THEM THAT
                                         if(acc->balance == 0){
                                             write(connfd,"Current balance is 0. Cannot withdraw\n",39);
                                         }else{
                                             acc->balance = 0;
                                             write(connfd,"Withdrew maximum amount possible (account at 0)\n",49);
                                         }
+                                        */
+                                        write(connfd,"Insufficient funds\n",20);
                                     }else if(tempWith <= acc->balance){
                                         acc->balance = acc->balance - tempWith;
                                         write(connfd,"Successfully withdrawn\n",24);
