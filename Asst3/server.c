@@ -14,8 +14,9 @@ pthread_t acceptor_thread;
 threadID* threadHead;
 
 // global mutexes
-pthread_mutex_t mutex;
-
+pthread_mutex_t data_mutex;
+pthread_mutex_t next_to_access_mutex;
+pthread_mutex_t low_priority_access_mutex;
 
 // this is gonna be the SIG handler
 void handle_sig(int sig){
@@ -43,6 +44,13 @@ void handle_sig(int sig){
         }    
 
     }else if(sig == SIGALRM){
+        // locking accounts so accounts cant be created
+
+        pthread_mutex_lock(&next_to_access_mutex);
+        pthread_mutex_lock(&data_mutex);
+        
+        pthread_mutex_unlock(&next_to_access_mutex);        
+
         account* ptr = head;
         printf("ACCOUNTS:\n");
         while(ptr != NULL){
@@ -54,6 +62,9 @@ void handle_sig(int sig){
             }
             ptr = ptr->next;
         }
+
+        pthread_mutex_unlock(&data_mutex);
+
     }
 }
 
@@ -347,7 +358,11 @@ void* client_service(void* params){
                         // name is not in use
     
                         // lock the accounts here so you can add a new one
-                        pthread_mutex_lock(&mutex);
+                        pthread_mutex_lock(&low_priority_access_mutex);
+                        pthread_mutex_lock(&next_to_access_mutex);
+                        pthread_mutex_lock(&data_mutex);
+                        
+                        pthread_mutex_unlock(&next_to_access_mutex);
 
                         tempAcc = (account*)malloc(sizeof(account));
                         strcpy(tempAcc->name, commandArg);
@@ -358,7 +373,8 @@ void* client_service(void* params){
                         write(connfd,"Account created\n",17);
 
                         //unlock the accounts here
-                        pthread_mutex_unlock(&mutex);
+                        pthread_mutex_unlock(&data_mutex);
+                        pthread_mutex_unlock(&low_priority_access_mutex);
 
                     }else{
                         // name is already used
@@ -519,7 +535,7 @@ void* client_service(void* params){
                                         }
 
                                         // write to client and then break out of this loop so this thread goes away                        
-                                        write(connfd,"Shutting down",14);
+                                        write(connfd,"Disconnecting from server\n",27);
                                         // print to server that a client disconnected
                                         printf("Client disconnected...\n");
                                         break;
@@ -643,6 +659,7 @@ void* session_acceptor(void* params){
 
    
     return NULL;
+
 }
 
   
