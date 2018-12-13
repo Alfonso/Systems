@@ -126,6 +126,7 @@ int main(int argc,char** argv)
         if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) { 
             //printf("connection with the server failed...\n"); 
             //exit(0);
+            sleep(3);
             continue; 
         } 
         else{

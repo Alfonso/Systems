@@ -491,13 +491,13 @@ void* client_service(void* params){
                             if(strlen(buff) < 6){        
                                 if(inService == 1){
                                     // initialize the string to 1000 bytes
-                                    char stroutput[1000];
-                                    bzero(stroutput,1000);
+                                    char stroutput[5000];
+                                    bzero(stroutput,5000);
 
                                     // convert the double to a string
                                     sprintf(stroutput,"Balance: %lf\n",acc->balance);
 
-                                    write(connfd,stroutput,1000);
+                                    write(connfd,stroutput,5000);
       
                                 }else{
                                     write(connfd,"No account in service\n",23);
